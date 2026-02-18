@@ -3,7 +3,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    # --- TOUT CECI DOIT ÊTRE ALIGNÉ ---
     build:
+      context: .
+      dockerfile: Dockerfile
     ports:
       - 3000:3000
     volumes:
@@ -11,6 +14,7 @@ services:
     environment:
       - FORCE_SSL=${HOST}
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/docuseal
+    # ----------------------------------
 
   postgres:
     image: postgres:18
