@@ -13,6 +13,7 @@ services:
     volumes:
       - docuseal:/data/docuseal
     environment:
+      - MULTITENANT=false
       - RUBY_YJIT_ENABLE=0
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/docuseal
       - REDIS_URL=redis://redis:6379/0
