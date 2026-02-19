@@ -1,4 +1,4 @@
-FROM ruby:4.0.1-alpine AS download
+FROM ruby:4.0.1-slim-bookworm AS download
 
 WORKDIR /fonts
 
