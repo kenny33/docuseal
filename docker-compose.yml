@@ -1,25 +1,25 @@
 services:
   app:
-    depends_on:
-      postgres:
-        condition: service_healthy
-    # --- TOUT CECI DOIT ÊTRE ALIGNÉ ---
     build:
       context: .
       dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       - 3010:3000
     volumes:
-      - ./docuseal:/data/docuseal
+      # On change './docuseal' par './docuseal-test'
+      - ./docuseal-test:/data/docuseal
     environment:
-      - FORCE_SSL=${HOST}
+      - RUBY_YJIT_ENABLE=0
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/docuseal
-    # ----------------------------------
 
   postgres:
     image: postgres:18
     volumes:
-      - './pg_data:/var/lib/postgresql/18/docker'
+      # On change './pg_data' par './pg_data-test'
+      - './pg_data-test:/var/lib/postgresql/18/docker'
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -29,4 +29,3 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-
