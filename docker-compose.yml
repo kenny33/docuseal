@@ -12,7 +12,6 @@ services:
       # On change './docuseal' par './docuseal-test'
       - ./docuseal-test:/data/docuseal
     environment:
-      - RUBY_YJIT_ENABLE=0
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/docuseal
 
   postgres:
