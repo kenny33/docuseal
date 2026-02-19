@@ -39,6 +39,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && gem install shakapacker \
     && rm -rf /var/lib/apt/lists/*
 
+# Assurez-vous qu'il y a bien un saut de ligne ici
 COPY ./package.json ./yarn.lock ./
 RUN yarn install --network-timeout 1000000
 
@@ -64,7 +65,7 @@ ENV OPENSSL_CONF=/etc/openssl_legacy.cnf
 
 WORKDIR /app
 
-# Installation des dépendances (Noms corrigés pour Debian)
+# Installation des dépendances système Debian
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libsqlite3-dev \
     libpq-dev \
@@ -77,7 +78,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && mkdir -p /fonts \
     && rm -rf /var/lib/apt/lists/*
 
-# Création de l'utilisateur (Syntaxe Debian)
+# Création de l'utilisateur docuseal (Syntaxe Debian)
 RUN groupadd -g 2000 docuseal && \
     useradd -u 2000 -g docuseal -m -s /bin/sh docuseal
 
@@ -95,7 +96,7 @@ activate = 1' >> /etc/openssl_legacy.cnf
 
 COPY --chown=docuseal:docuseal ./Gemfile ./Gemfile.lock ./
 
-# Installation des Gems
+# Installation des Gems avec build-essential temporaire
 RUN apt-get update && apt-get install -y --no-install-recommends build-essential git \
     && bundle install \
     && apt-get purge -y --auto-remove build-essential git \
@@ -112,7 +113,7 @@ COPY --chown=docuseal:docuseal ./tmp ./tmp
 COPY --chown=docuseal:docuseal LICENSE README.md Rakefile config.ru .version ./
 COPY --chown=docuseal:docuseal .version ./public/version
 
-# Récupération des fichiers des stages précédents
+# Récupération des assets et polices des stages précédents
 COPY --chown=docuseal:docuseal --from=download /fonts/GoNotoKurrent-Regular.ttf /fonts/GoNotoKurrent-Bold.ttf /fonts/DancingScript-Regular.otf /fonts/OFL.txt /fonts/
 COPY --from=download /fonts/FreeSans.ttf /usr/share/fonts/truetype/freefont/
 COPY --from=download /pdfium-linux/lib/libpdfium.so /usr/lib/libpdfium.so
@@ -121,13 +122,14 @@ COPY --chown=docuseal:docuseal --from=download /model.onnx /app/tmp/model.onnx
 COPY --chown=docuseal:docuseal --from=webpack /app/public/packs ./public/packs
 
 RUN ln -s /fonts /app/public/fonts && \
-    bundle exec bootsnap precompile -j 1 --gemfile && \
+    bundle exec bootsnap precompile --gemfile && \
     chown -R docuseal:docuseal /app/tmp/cache
 
 WORKDIR /data/docuseal
 ENV HOME=/home/docuseal
 ENV WORKDIR=/data/docuseal
 
+# Lancer l'app en tant qu'utilisateur non-root
 USER docuseal
 
 EXPOSE 3000
