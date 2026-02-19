@@ -30,14 +30,3 @@ services:
       timeout: 5s
       retries: 5
 
-  caddy:
-    image: caddy:latest
-    command: caddy reverse-proxy --from $HOST --to app:3000
-    ports:
-      - 80:80
-      - 443:443
-      - 443:443/udp
-    volumes:
-      - ./caddy:/data/caddy
-    environment:
-      - HOST=${HOST}
