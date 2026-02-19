@@ -36,22 +36,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     build-essential \
     && npm install -g yarn \
-    && gem install shakapacker \
+    && gem install shakapacker --no-document \
     && rm -rf /var/lib/apt/lists/*
 
-# Assurez-vous qu'il y a bien un saut de ligne ici
-COPY ./package.json ./yarn.lock ./
+COPY package.json yarn.lock ./
 RUN yarn install --network-timeout 1000000
 
-COPY ./bin/shakapacker ./bin/shakapacker
-COPY ./config/webpack ./config/webpack
-COPY ./config/shakapacker.yml ./config/shakapacker.yml
-COPY ./postcss.config.js ./postcss.config.js
-COPY ./tailwind.config.js ./tailwind.config.js
-COPY ./tailwind.form.config.js ./tailwind.form.config.js
-COPY ./tailwind.application.config.js ./tailwind.application.config.js
-COPY ./app/javascript ./app/javascript
-COPY ./app/views ./app/views
+COPY bin/shakapacker ./bin/shakapacker
+COPY config/webpack ./config/webpack
+COPY config/shakapacker.yml ./config/shakapacker.yml
+COPY postcss.config.js ./postcss.config.js
+COPY tailwind.config.js ./tailwind.config.js
+COPY tailwind.form.config.js ./tailwind.form.config.js
+COPY tailwind.application.config.js ./tailwind.application.config.js
+COPY app/javascript ./app/javascript
+COPY app/views ./app/views
 
 RUN echo "gem 'shakapacker'" > Gemfile && ./bin/shakapacker
 
@@ -65,7 +64,6 @@ ENV OPENSSL_CONF=/etc/openssl_legacy.cnf
 
 WORKDIR /app
 
-# Installation des dépendances système Debian
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libsqlite3-dev \
     libpq-dev \
@@ -78,7 +76,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && mkdir -p /fonts \
     && rm -rf /var/lib/apt/lists/*
 
-# Création de l'utilisateur docuseal (Syntaxe Debian)
 RUN groupadd -g 2000 docuseal && \
     useradd -u 2000 -g docuseal -m -s /bin/sh docuseal
 
@@ -94,26 +91,16 @@ activate = 1\n\
 [legacy_sect]\n\
 activate = 1' >> /etc/openssl_legacy.cnf
 
-COPY --chown=docuseal:docuseal ./Gemfile ./Gemfile.lock ./
+COPY --chown=docuseal:docuseal Gemfile Gemfile.lock ./
 
-# Installation des Gems avec build-essential temporaire
 RUN apt-get update && apt-get install -y --no-install-recommends build-essential git \
     && bundle install \
     && apt-get purge -y --auto-remove build-essential git \
     && rm -rf /var/lib/apt/lists/* ~/.bundle /usr/local/bundle/cache
 
-COPY --chown=docuseal:docuseal ./bin ./bin
-COPY --chown=docuseal:docuseal ./app ./app
-COPY --chown=docuseal:docuseal ./config ./config
-COPY --chown=docuseal:docuseal ./db/migrate ./db/migrate
-COPY --chown=docuseal:docuseal ./log ./log
-COPY --chown=docuseal:docuseal ./lib ./lib
-COPY --chown=docuseal:docuseal ./public ./public
-COPY --chown=docuseal:docuseal ./tmp ./tmp
-COPY --chown=docuseal:docuseal LICENSE README.md Rakefile config.ru .version ./
-COPY --chown=docuseal:docuseal .version ./public/version
+COPY --chown=docuseal:docuseal . .
 
-# Récupération des assets et polices des stages précédents
+# Récupération sécurisée des polices et binaires
 COPY --chown=docuseal:docuseal --from=download /fonts/GoNotoKurrent-Regular.ttf /fonts/GoNotoKurrent-Bold.ttf /fonts/DancingScript-Regular.otf /fonts/OFL.txt /fonts/
 COPY --from=download /fonts/FreeSans.ttf /usr/share/fonts/truetype/freefont/
 COPY --from=download /pdfium-linux/lib/libpdfium.so /usr/lib/libpdfium.so
@@ -121,15 +108,18 @@ COPY --from=download /pdfium-linux/licenses/pdfium.txt /usr/lib/libpdfium-LICENS
 COPY --chown=docuseal:docuseal --from=download /model.onnx /app/tmp/model.onnx
 COPY --chown=docuseal:docuseal --from=webpack /app/public/packs ./public/packs
 
-RUN ln -s /fonts /app/public/fonts && \
-    bundle exec bootsnap precompile --gemfile && \
+# Lien symbolique onnxruntime (protection si absent)
+RUN GEM_ONNX=$(ruby -e "spec = Gem::Specification.find_by_name('onnxruntime'); print spec.gem_dir if spec" 2>/dev/null) && \
+    if [ -n "$GEM_ONNX" ]; then mkdir -p "$GEM_ONNX/vendor" && ln -sf /usr/lib/libonnxruntime.so.1 "$GEM_ONNX/vendor/"; fi
+
+RUN ln -sf /fonts /app/public/fonts && \
+    bundle exec bootsnap precompile --gemfile Gemfile app/ lib/ && \
     chown -R docuseal:docuseal /app/tmp/cache
 
 WORKDIR /data/docuseal
 ENV HOME=/home/docuseal
 ENV WORKDIR=/data/docuseal
 
-# Lancer l'app en tant qu'utilisateur non-root
 USER docuseal
 
 EXPOSE 3000
