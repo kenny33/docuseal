@@ -1,5 +1,4 @@
-services:
-  app:
+app:
     build:
       context: .
       dockerfile: Dockerfile
@@ -9,22 +8,15 @@ services:
     ports:
       - 3010:3000
     volumes:
-      # On change './docuseal' par './docuseal-test'
       - ./docuseal-test:/data/docuseal
     environment:
+      - RUBY_YJIT_ENABLE=0
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/docuseal
-
-  postgres:
-    image: postgres:18
-    volumes:
-      # On change './pg_data' par './pg_data-test'
-      - './pg_data-test:/var/lib/postgresql/18/docker'
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: docuseal
+    # SUPPRIMEZ TOUTE LA SECTION "healthcheck" CI-DESSOUS SI ELLE EXISTE
+    # OU UTILISEZ CELLE-CI QUI EST COMPATIBLE DEBIAN :
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
+      test: ["CMD", "curl", "-f", "http://localhost:3000/healthz"]
+      interval: 30s
+      timeout: 10s
       retries: 5
+      start_period: 60s
