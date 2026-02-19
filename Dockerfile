@@ -1,3 +1,4 @@
+# --- STAGE 1: DOWNLOAD ---
 FROM ruby:4.0.1-slim-bookworm AS download
 
 WORKDIR /fonts
@@ -20,21 +21,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN fontforge -lang=py -c 'font1 = fontforge.open("FreeSans.ttf"); font2 = fontforge.open("NotoSansSymbols2-Regular.ttf"); font1.mergeFonts(font2); font1.generate("FreeSans.ttf")'
 
-FROM ruby:4.0.1-alpine AS webpack
+# --- STAGE 2: WEBPACK (ASSETS) ---
+FROM ruby:4.0.1-slim-bookworm AS webpack
 
 ENV RAILS_ENV=production
 ENV NODE_ENV=production
+ENV RUBY_YJIT_ENABLE=0
 
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     nodejs \
-    yarn \
+    npm \
     git \
     build-essential \
+    && npm install -g yarn \
     && gem install shakapacker \
-    && rm -rf /var/lib/apt/lists/*COPY ./package.json ./yarn.lock ./
+    && rm -rf /var/lib/apt/lists/*
 
+COPY ./package.json ./yarn.lock ./
 RUN yarn install --network-timeout 1000000
 
 COPY ./bin/shakapacker ./bin/shakapacker
@@ -49,15 +54,17 @@ COPY ./app/views ./app/views
 
 RUN echo "gem 'shakapacker'" > Gemfile && ./bin/shakapacker
 
-FROM ruby:4.0.1-alpine AS app
+# --- STAGE 3: FINAL APP ---
+FROM ruby:4.0.1-slim-bookworm AS app
 
 ENV RAILS_ENV=production
 ENV BUNDLE_WITHOUT="development:test"
-ENV LD_PRELOAD=/lib/libgcompat.so.0
+ENV RUBY_YJIT_ENABLE=0
 ENV OPENSSL_CONF=/etc/openssl_legacy.cnf
 
 WORKDIR /app
 
+# Installation des dépendances (Noms corrigés pour Debian)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libsqlite3-dev \
     libpq-dev \
@@ -66,11 +73,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     redis-server \
     libheif-dev \
     libvips42 \
-    ttf-freefont \
+    fonts-freefont-ttf \
     && mkdir -p /fonts \
-    && (rm /usr/share/fonts/truetype/freefont/FreeSans.ttf || true) \
     && rm -rf /var/lib/apt/lists/*
-RUN addgroup -g 2000 docuseal && adduser -u 2000 -G docuseal -s /bin/sh -D -h /home/docuseal docuseal
+
+# Création de l'utilisateur (Syntaxe Debian)
+RUN groupadd -g 2000 docuseal && \
+    useradd -u 2000 -g docuseal -m -s /bin/sh docuseal
 
 RUN echo $'.include = /etc/ssl/openssl.cnf\n\
 \n\
@@ -86,12 +95,12 @@ activate = 1' >> /etc/openssl_legacy.cnf
 
 COPY --chown=docuseal:docuseal ./Gemfile ./Gemfile.lock ./
 
+# Installation des Gems
 RUN apt-get update && apt-get install -y --no-install-recommends build-essential git \
     && bundle install \
     && apt-get purge -y --auto-remove build-essential git \
-    && rm -rf /var/lib/apt/lists/* ~/.bundle /usr/local/bundle/cache \
-    && ruby -e "puts Dir['/usr/local/bundle/**/{spec,rdoc,resources/shared,resources/collation,resources/locales}']" | xargs rm -rf \
-    && ln -sf /usr/lib/libonnxruntime.so.1 $(ruby -e "print Dir[Gem::Specification.find_by_name('onnxruntime').gem_dir + '/vendor/*.so'].first")
+    && rm -rf /var/lib/apt/lists/* ~/.bundle /usr/local/bundle/cache
+
 COPY --chown=docuseal:docuseal ./bin ./bin
 COPY --chown=docuseal:docuseal ./app ./app
 COPY --chown=docuseal:docuseal ./config ./config
@@ -103,20 +112,23 @@ COPY --chown=docuseal:docuseal ./tmp ./tmp
 COPY --chown=docuseal:docuseal LICENSE README.md Rakefile config.ru .version ./
 COPY --chown=docuseal:docuseal .version ./public/version
 
-COPY --chown=docuseal:docuseal --from=download /fonts/GoNotoKurrent-Regular.ttf /fonts/GoNotoKurrent-Bold.ttf /fonts/DancingScript-Regular.otf /fonts/OFL.txt /fonts
-COPY --from=download /fonts/FreeSans.ttf /usr/share/fonts/freefont
+# Récupération des fichiers des stages précédents
+COPY --chown=docuseal:docuseal --from=download /fonts/GoNotoKurrent-Regular.ttf /fonts/GoNotoKurrent-Bold.ttf /fonts/DancingScript-Regular.otf /fonts/OFL.txt /fonts/
+COPY --from=download /fonts/FreeSans.ttf /usr/share/fonts/truetype/freefont/
 COPY --from=download /pdfium-linux/lib/libpdfium.so /usr/lib/libpdfium.so
 COPY --from=download /pdfium-linux/licenses/pdfium.txt /usr/lib/libpdfium-LICENSE.txt
 COPY --chown=docuseal:docuseal --from=download /model.onnx /app/tmp/model.onnx
 COPY --chown=docuseal:docuseal --from=webpack /app/public/packs ./public/packs
 
 RUN ln -s /fonts /app/public/fonts && \
-    bundle exec bootsnap precompile -j 1 --gemfile app/ lib/ && \
+    bundle exec bootsnap precompile -j 1 --gemfile && \
     chown -R docuseal:docuseal /app/tmp/cache
 
 WORKDIR /data/docuseal
 ENV HOME=/home/docuseal
 ENV WORKDIR=/data/docuseal
+
+USER docuseal
 
 EXPOSE 3000
 CMD ["/app/bin/bundle", "exec", "puma", "-C", "/app/config/puma.rb", "--dir", "/app"]
