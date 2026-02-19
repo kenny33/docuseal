@@ -108,6 +108,9 @@ COPY --from=download /pdfium-linux/licenses/pdfium.txt /usr/lib/libpdfium-LICENS
 COPY --chown=docuseal:docuseal --from=download /model.onnx /app/tmp/model.onnx
 COPY --chown=docuseal:docuseal --from=webpack /app/public/packs ./public/packs
 
+# Permissions sur les polices pour l'utilisateur docuseal
+RUN chown -R docuseal:docuseal /fonts
+
 # Lien symbolique onnxruntime (protection si absent)
 RUN GEM_ONNX=$(ruby -e "spec = Gem::Specification.find_by_name('onnxruntime'); print spec.gem_dir if spec" 2>/dev/null) && \
     if [ -n "$GEM_ONNX" ]; then mkdir -p "$GEM_ONNX/vendor" && ln -sf /usr/lib/libonnxruntime.so.1 "$GEM_ONNX/vendor/"; fi
