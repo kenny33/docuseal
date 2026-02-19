@@ -59,7 +59,7 @@ module Docuseal
 
   def multitenant?
     ENV['MULTITENANT'] == 'false'
-  end
+ end
 
   def advanced_formats?
     multitenant?
