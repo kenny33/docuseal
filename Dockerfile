@@ -2,17 +2,21 @@ FROM ruby:4.0.1-slim-bookworm AS download
 
 WORKDIR /fonts
 
-RUN apk --no-cache add fontforge wget && \
-    wget https://github.com/satbyy/go-noto-universal/releases/download/v7.0/GoNotoKurrent-Regular.ttf && \
-    wget https://github.com/satbyy/go-noto-universal/releases/download/v7.0/GoNotoKurrent-Bold.ttf && \
-    wget https://github.com/impallari/DancingScript/raw/master/fonts/DancingScript-Regular.otf && \
-    wget https://cdn.jsdelivr.net/gh/notofonts/notofonts.github.io/fonts/NotoSansSymbols2/hinted/ttf/NotoSansSymbols2-Regular.ttf && \
-    wget https://github.com/Maxattax97/gnu-freefont/raw/master/ttf/FreeSans.ttf && \
-    wget https://github.com/impallari/DancingScript/raw/master/OFL.txt && \
-    wget -O /model.onnx "https://github.com/docusealco/fields-detection/releases/download/2.0.0/model_704_int8.onnx" && \
-    wget -O pdfium-linux.tgz "https://github.com/docusealco/pdfium-binaries/releases/latest/download/pdfium-linux-$(uname -m | sed 's/x86_64/x64/;s/aarch64/arm64/').tgz" && \
-    mkdir -p /pdfium-linux && \
-    tar -xzf pdfium-linux.tgz -C /pdfium-linux
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    fontforge \
+    wget \
+    ca-certificates \
+    && wget https://github.com/satbyy/go-noto-universal/releases/download/v7.0/GoNotoKurrent-Regular.ttf \
+    && wget https://github.com/satbyy/go-noto-universal/releases/download/v7.0/GoNotoKurrent-Bold.ttf \
+    && wget https://github.com/impallari/DancingScript/raw/master/fonts/DancingScript-Regular.otf \
+    && wget https://cdn.jsdelivr.net/gh/notofonts/notofonts.github.io/fonts/NotoSansSymbols2/hinted/ttf/NotoSansSymbols2-Regular.ttf \
+    && wget https://github.com/Maxattax97/gnu-freefont/raw/master/ttf/FreeSans.ttf \
+    && wget https://github.com/impallari/DancingScript/raw/master/OFL.txt \
+    && wget -O /model.onnx "https://github.com/docusealco/fields-detection/releases/download/2.0.0/model_704_int8.onnx" \
+    && wget -O pdfium-linux.tgz "https://github.com/docusealco/pdfium-binaries/releases/latest/download/pdfium-linux-$(uname -m | sed 's/x86_64/x64/;s/aarch64/arm64/').tgz" \
+    && mkdir -p /pdfium-linux \
+    && tar -xzf pdfium-linux.tgz -C /pdfium-linux \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN fontforge -lang=py -c 'font1 = fontforge.open("FreeSans.ttf"); font2 = fontforge.open("NotoSansSymbols2-Regular.ttf"); font1.mergeFonts(font2); font1.generate("FreeSans.ttf")'
 
@@ -23,10 +27,13 @@ ENV NODE_ENV=production
 
 WORKDIR /app
 
-RUN apk add --no-cache nodejs yarn git build-base && \
-    gem install shakapacker
-
-COPY ./package.json ./yarn.lock ./
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    nodejs \
+    yarn \
+    git \
+    build-essential \
+    && gem install shakapacker \
+    && rm -rf /var/lib/apt/lists/*COPY ./package.json ./yarn.lock ./
 
 RUN yarn install --network-timeout 1000000
 
@@ -51,8 +58,18 @@ ENV OPENSSL_CONF=/etc/openssl_legacy.cnf
 
 WORKDIR /app
 
-RUN apk add --no-cache sqlite-dev libpq-dev vips-dev yaml-dev redis libheif vips-heif gcompat ttf-freefont onnxruntime && mkdir /fonts && rm /usr/share/fonts/freefont/FreeSans.otf
-
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libsqlite3-dev \
+    libpq-dev \
+    libvips-dev \
+    libyaml-dev \
+    redis-server \
+    libheif-dev \
+    libvips42 \
+    ttf-freefont \
+    && mkdir -p /fonts \
+    && (rm /usr/share/fonts/truetype/freefont/FreeSans.ttf || true) \
+    && rm -rf /var/lib/apt/lists/*
 RUN addgroup -g 2000 docuseal && adduser -u 2000 -G docuseal -s /bin/sh -D -h /home/docuseal docuseal
 
 RUN echo $'.include = /etc/ssl/openssl.cnf\n\
@@ -69,8 +86,12 @@ activate = 1' >> /etc/openssl_legacy.cnf
 
 COPY --chown=docuseal:docuseal ./Gemfile ./Gemfile.lock ./
 
-RUN apk add --no-cache build-base git && bundle install && apk del --no-cache build-base git && rm -rf ~/.bundle /usr/local/bundle/cache && ruby -e "puts Dir['/usr/local/bundle/**/{spec,rdoc,resources/shared,resources/collation,resources/locales}']" | xargs rm -rf && ln -sf /usr/lib/libonnxruntime.so.1 $(ruby -e "print Dir[Gem::Specification.find_by_name('onnxruntime').gem_dir + '/vendor/*.so'].first")
-
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential git \
+    && bundle install \
+    && apt-get purge -y --auto-remove build-essential git \
+    && rm -rf /var/lib/apt/lists/* ~/.bundle /usr/local/bundle/cache \
+    && ruby -e "puts Dir['/usr/local/bundle/**/{spec,rdoc,resources/shared,resources/collation,resources/locales}']" | xargs rm -rf \
+    && ln -sf /usr/lib/libonnxruntime.so.1 $(ruby -e "print Dir[Gem::Specification.find_by_name('onnxruntime').gem_dir + '/vendor/*.so'].first")
 COPY --chown=docuseal:docuseal ./bin ./bin
 COPY --chown=docuseal:docuseal ./app ./app
 COPY --chown=docuseal:docuseal ./config ./config
